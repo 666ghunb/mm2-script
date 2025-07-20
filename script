@@ -1,0 +1,332 @@
+--[[
+  Murder Mystery 2 Ultimate Autofarm
+  Особенности:
+  - Автосбор ивентных шариков
+  - Прохождение сквозь стены (NoClip)
+  - Режим полета
+  - Автопрыжок через препятствия
+  - Регулируемая скорость (до 50)
+  - Красивое перемещаемое меню
+]]
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Настройки
+local Settings = {
+    Enabled = false,
+    Speed = 27,
+    FlySpeed = 30,
+    CollectRadius = 50,
+    MenuVisible = true,
+    AutoJump = true,
+    NoClip = true,
+    Flying = false,
+    ShowPath = false
+}
+
+-- Создаем меню
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.CoreGui
+ScreenGui.Name = "MM2UltimateBot"
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0.35, 0, 0.55, 0)
+Frame.Position = UDim2.new(0.05, 0, 0.25, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Frame.BackgroundTransparency = 0.1
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 12)
+Corner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Text = "MM2 ULTIMATE BOT"
+Title.Size = UDim2.new(1, 0, 0.1, 0)
+Title.Position = UDim2.new(0, 0, 0, 0)
+Title.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.Parent = Frame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = Title
+
+-- Функция для создания элементов меню
+local function CreateLabel(text, yPos, parent)
+    local label = Instance.new("TextLabel")
+    label.Text = text
+    label.Size = UDim2.new(0.9, 0, 0.06, 0)
+    label.Position = UDim2.new(0.05, 0, yPos, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Font = Enum.Font.Gotham
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = parent
+    return label
+end
+
+local function CreateToggle(text, yPos, settingName, parent)
+    local toggleFrame = Instance.new("Frame")
+    toggleFrame.Size = UDim2.new(0.9, 0, 0.08, 0)
+    toggleFrame.Position = UDim2.new(0.05, 0, yPos, 0)
+    toggleFrame.BackgroundTransparency = 1
+    toggleFrame.Parent = parent
+
+    local toggleText = CreateLabel(text, 0, toggleFrame)
+    toggleText.Size = UDim2.new(0.7, 0, 1, 0)
+
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Size = UDim2.new(0.25, 0, 0.8, 0)
+    toggleButton.Position = UDim2.new(0.7, 0, 0.1, 0)
+    toggleButton.Text = Settings[settingName] and "ON" or "OFF"
+    toggleButton.BackgroundColor3 = Settings[settingName] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+    toggleButton.TextColor3 = Color3.new(1, 1, 1)
+    toggleButton.Font = Enum.Font.GothamBold
+    toggleButton.Parent = toggleFrame
+    
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = UDim.new(0, 6)
+    buttonCorner.Parent = toggleButton
+
+    toggleButton.MouseButton1Click:Connect(function()
+        Settings[settingName] = not Settings[settingName]
+        toggleButton.Text = Settings[settingName] and "ON" or "OFF"
+        toggleButton.BackgroundColor3 = Settings[settingName] and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+        
+        -- Особые действия для некоторых функций
+        if settingName == "Flying" then
+            if Settings.Flying then
+                EnableFlight()
+            else
+                DisableFlight()
+            end
+        end
+    end)
+    
+    return toggleButton
+end
+
+local function CreateSlider(text, yPos, min, max, step, settingName, parent)
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Size = UDim2.new(0.9, 0, 0.08, 0)
+    sliderFrame.Position = UDim2.new(0.05, 0, yPos, 0)
+    sliderFrame.BackgroundTransparency = 1
+    sliderFrame.Parent = parent
+
+    local sliderText = CreateLabel(text .. ": " .. Settings[settingName], 0, sliderFrame)
+    
+    local slider = Instance.new("TextButton")
+    slider.Text = "▲ Изменить ▼"
+    slider.Size = UDim2.new(1, 0, 0.8, 0)
+    slider.Position = UDim2.new(0, 0, 0.1, 0)
+    slider.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    slider.TextColor3 = Color3.new(1, 1, 1)
+    slider.Font = Enum.Font.Gotham
+    slider.Parent = sliderFrame
+    
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 6)
+    sliderCorner.Parent = slider
+
+    slider.MouseButton1Click:Connect(function()
+        Settings[settingName] = Settings[settingName] + step
+        if Settings[settingName] > max then Settings[settingName] = min end
+        sliderText.Text = text .. ": " .. Settings[settingName]
+    end)
+    
+    return slider
+end
+
+-- Создаем элементы меню
+CreateToggle("Автофарм включен", 0.12, "Enabled", Frame)
+CreateToggle("Автопрыжок", 0.22, "AutoJump", Frame)
+CreateToggle("NoClip", 0.32, "NoClip", Frame)
+CreateToggle("Режим полета", 0.42, "Flying", Frame)
+CreateSlider("Скорость", 0.52, 10, 50, 1, "Speed", Frame)
+CreateSlider("Скорость полета", 0.62, 10, 100, 5, "FlySpeed", Frame)
+CreateSlider("Радиус сбора", 0.72, 10, 150, 5, "CollectRadius", Frame)
+
+local HideButton = CreateToggle("Скрыть меню (H)", 0.82, "MenuVisible", Frame)
+HideButton.MouseButton1Click:Connect(function()
+    Settings.MenuVisible = not Settings.MenuVisible
+    Frame.Visible = Settings.MenuVisible
+    HideButton.Text = Settings.MenuVisible and "ON" : "OFF"
+    HideButton.BackgroundColor3 = Settings.MenuVisible and Color3.fromRGB(0, 170, 0) or Color3.fromRGB(170, 0, 0)
+end)
+
+-- Функции для NoClip
+local function NoclipLoop()
+    if Settings.NoClip and LocalPlayer.Character then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end
+
+-- Функции для полета
+local flyBodyVel, flyBodyGyro
+
+local function EnableFlight()
+    if not LocalPlayer.Character then return end
+    local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    DisableFlight()
+    
+    flyBodyVel = Instance.new("BodyVelocity")
+    flyBodyVel.Velocity = Vector3.new(0, 0, 0)
+    flyBodyVel.MaxForce = Vector3.new(10000, 10000, 10000)
+    flyBodyVel.P = 10000
+    flyBodyVel.Parent = rootPart
+    
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.MaxTorque = Vector3.new(10000, 10000, 10000)
+    flyBodyGyro.P = 10000
+    flyBodyGyro.CFrame = rootPart.CFrame
+    flyBodyGyro.Parent = rootPart
+    
+    Settings.NoClip = true
+    -- Обновляем кнопку NoClip
+    for _, child in ipairs(Frame:GetChildren()) do
+        if child:IsA("Frame") and child:FindFirstChild("TextButton") then
+            local button = child.TextButton
+            if button.Text:find("NoClip") then
+                button.Text = "NoClip: ON"
+                button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+            end
+        end
+    end
+end
+
+local function DisableFlight()
+    if flyBodyVel then flyBodyVel:Destroy() flyBodyVel = nil end
+    if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+end
+
+-- Поиск шариков
+local function findEventBalls()
+    local balls = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name:find("Ball") and obj:IsA("BasePart") then
+            table.insert(balls, obj)
+        end
+    end
+    return balls
+end
+
+-- Перемещение к цели
+local function moveToTarget(target)
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+    
+    -- Для режима полета
+    if Settings.Flying and flyBodyVel and flyBodyGyro then
+        local direction = (target.Position - rootPart.Position).Unit
+        flyBodyVel.Velocity = direction * Settings.FlySpeed
+        flyBodyGyro.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + direction)
+        return
+    end
+    
+    -- Рассчитываем направление
+    local direction = (target.Position - rootPart.Position).Unit
+    local moveVector = Vector3.new(direction.X, 0, direction.Z) * Settings.Speed
+    
+    -- Применяем движение
+    humanoid:MoveTo(rootPart.Position + moveVector)
+    
+    -- Автопрыжок при необходимости
+    if Settings.AutoJump and not Settings.Flying then
+        local ray = Ray.new(rootPart.Position, rootPart.CFrame.LookVector * 5)
+        local hit = workspace:FindPartOnRay(ray, character)
+        if hit then
+            humanoid.Jump = true
+        end
+    end
+end
+
+-- Сбор шарика
+local function collectBall(ball)
+    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, ball, 0)
+    firetouchinterest(LocalPlayer.Character.HumanoidRootPart, ball, 1)
+end
+
+-- Основной цикл фарма
+local function autofarmLoop()
+    if not Settings.Enabled then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+    
+    -- Поиск ближайшего шарика
+    local balls = findEventBalls()
+    local closestBall, closestDistance = nil, math.huge
+    
+    for _, ball in ipairs(balls) do
+        local distance = (ball.Position - rootPart.Position).Magnitude
+        if distance < closestDistance then
+            closestBall = ball
+            closestDistance = distance
+        end
+    end
+    
+    -- Если шарик найден в радиусе сбора
+    if closestBall and closestDistance <= Settings.CollectRadius then
+        -- Двигаемся к шарику
+        moveToTarget(closestBall)
+        
+        -- Собираем шарик, если достаточно близко
+        if closestDistance < 15 then
+            collectBall(closestBall)
+        end
+    end
+end
+
+-- Обработка клавиши H для меню
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.KeyCode == Enum.KeyCode.H and not gameProcessed then
+        Settings.MenuVisible = not Settings.MenuVisible
+        Frame.Visible = Settings.MenuVisible
+    end
+end)
+
+-- Главные циклы
+RunService.Heartbeat:Connect(autofarmLoop)
+RunService.Stepped:Connect(NoclipLoop)
+
+-- Уведомление
+local Notification = Instance.new("TextLabel")
+Notification.Text = "MM2 Ultimate Bot загружен! Нажмите H для меню"
+Notification.Size = UDim2.new(1, 0, 0.05, 0)
+Notification.Position = UDim2.new(0, 0, 0.95, 0)
+Notification.BackgroundTransparency = 0.7
+Notification.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Notification.TextColor3 = Color3.new(1, 1, 1)
+Notification.Font = Enum.Font.GothamBold
+Notification.Parent = ScreenGui
+
+task.delay(5, function()
+    Notification:Destroy()
+end)
+
+print("MM2 Ultimate Bot активирован! NoClip и полет доступны в меню.")
